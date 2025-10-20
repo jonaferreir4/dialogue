@@ -1,6 +1,11 @@
+using WebApi.Hubs;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSignalRCore();
+
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello World!");
+app.MapHub<ChatRoom>("/chat");
 
 app.Run();

@@ -1,5 +1,5 @@
 
-namespace src.Domain.Entities;
+namespace Domain.Entities;
     public class BaseEntity
     {
        public Guid Id { get; set; }
