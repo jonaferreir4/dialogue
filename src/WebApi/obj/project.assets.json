@@ -123,6 +123,16 @@
         "runtime": {
           "lib/net40/Owin.dll": {}
         }
+      },
+      "Domain/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/Domain.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/Domain.dll": {}
+        }
       }
     }
   },
@@ -283,10 +293,16 @@
         "owin.1.0.0.nupkg.sha512",
         "owin.nuspec"
       ]
+    },
+    "Domain/1.0.0": {
+      "type": "project",
+      "path": "../Domain/Domain.csproj",
+      "msbuildProject": "../Domain/Domain.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net8.0": [
+      "Domain >= 1.0.0",
       "Microsoft.AspNet.SignalR >= 2.4.3"
     ]
   },
@@ -314,7 +330,11 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "/home/jona/Área de trabalho/Dialogue/src/Domain/Domain.csproj": {
+              "projectPath": "/home/jona/Área de trabalho/Dialogue/src/Domain/Domain.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
