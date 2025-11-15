@@ -1,0 +1,79 @@
+
+# Ignora binários resultantes da compilação
+**/[Dd]ebug/
+**/[Rr]elease/
+**/[Bb]in/
+**/[Oo]bj/
+**/[Tt]emp/
+**/_ReSharper.*/
+**/[Tt]est[Rr]esults/
+# Arquivos do pacote NuGet e símbolos
+*.nupkg
+*.snupkg
+# Cache de compilação
+.vs/
+*.vsp
+*.vspx
+
+## 📦 Pacotes
+# Diretórios de pacotes NuGet
+[Pp]ackages/
+# Diretórios de pacotes npm/yarn/pnpm (comuns em projetos ASP.NET Core que usam JS/TS)
+[Nn]ode_[Mm]odules/
+bower_components/
+jspm_packages/
+# Pacotes libman
+lib/
+
+## 🛠 Arquivos do Visual Studio (VS)
+# Usuário e layout da solução
+*.suo
+*.user
+*.useros
+*.sln.docstates
+# Arquivos de configurações do ambiente de trabalho do VS
+*.VC.db
+# Arquivos de depuração e traço
+*.pdb
+*.log
+*.rpt
+*.wrcl
+# Configurações de publicação e profile (exceto se você quiser versionar)
+*.pubxml
+*.useros.vspscc
+# Arquivos de backup
+*~
+*.bak
+*.old
+
+## 💻 Arquivos do Visual Studio Code (VS Code)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+## 🌐 ASP.NET Core Específicos
+# Arquivos de segredos (secrets.json)
+appsettings*.Development.json
+appsettings*.Staging.json
+# Segredos locais de desenvolvimento (muito importantes para segurança)
+**/appsettings.Development.json
+**/*.usersecrets
+
+## 🧪 Testes
+# Cobertura de código
+**/coverage/
+**/lcov.info
+
+## 🔒 Arquivos de Credenciais e Chaves
+# Qualquer arquivo que possa conter credenciais ou chaves
+# Exemplo (ajuste conforme o seu projeto):
+*.key
+*.pem
+*.pfx
+
+## 🗄 Diretórios de Log
+log/
+logs/
+*.log
