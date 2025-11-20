@@ -48,4 +48,14 @@ public class ChatRoom(IDictionary<string, User> connections) : Hub
         return Clients.Group(chatRoom)
             .SendAsync("ConnectedUser", users);
     }
+
+    public async Task StartTyping (string chatRoom, string username)
+    {
+        await Clients.OthersInGroup(chatRoom).SendAsync("UserTyping", username);
+    }
+
+    public async Task StopTyping (string chatRoom, string username)
+    {
+        await Clients.OthersInGroup(chatRoom).SendAsync("UserStopTyping", username);
+    }
 }
