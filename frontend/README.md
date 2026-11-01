@@ -48,75 +48,88 @@ A navegacao e gerenciada pela biblioteca `react-router-dom` v7 e compreende os s
 
 ---
 
-## 2. Especificacao do Contrato SignalR
+## 2. Especificação do Contrato SignalR & WebRTC
 
-A comunicacao em tempo real com o backend (hub padrao em `http://localhost:5000/chat`) segue o contrato estabelecido abaixo.
+A comunicação em tempo real com o backend (`/chat`) é gerenciada pela classe [`chatSignalR`](file:///home/jona/Área de trabalho/Dialogue/frontend/src/services/chatService/index.ts) com resolução dinâmica de host (`window.location.origin` ou `VITE_API_URL`).
 
 ### Eventos Recebidos pelo Cliente (Inbound Events)
 
-* `ReceiveMessage(user: string, message: string, messageTime: string)`: Notificacao enviada pelo servidor quando uma nova mensagem e transmitida na sala.
-* `ConnectedUser(users: string[])`: Atualizacao com a lista de usuarios ativos na sala atual.
-* `UserTyping(user: string)`: Notificacao informando que um usuario da sala iniciou a digitacao de uma mensagem.
-* `UserStopTyping(user: string)`: Notificacao informando que o usuario interrompeu ou concluiu a digitacao.
+#### Mensageria e Presença:
+* `ReceiveMessage(user: string, message: string, timestampUtc?: string, messageId?: string)`: Transmite mensagens para a sala.
+* `ConnectedUser(users: string[])`: Lista de nomes dos usuários ativos na sala.
+* `ConnectedUsersDetailed(users: ConnectedUserDetailed[])`: Detalhes de conexões com `connectionId` para roteamento WebRTC.
+* `UserTyping(user: string)`: Notificação de início de digitação.
+* `UserStopTyping(user: string)`: Notificação de término de digitação.
 
-### Metodos Invocados pelo Cliente (Outbound Methods)
+#### Sinalização WebRTC 1:1:
+* `ReceiveCallOffer(callerConnectionId: string, callerUsername: string, sdpOffer: string)`: Oferta SDP de chamada recebida de um participante.
+* `ReceiveCallAnswer(answererConnectionId: string, sdpAnswer: string)`: Resposta SDP recebida do destinatário da chamada.
+* `ReceiveIceCandidate(senderConnectionId: string, candidateJson: string)`: Candidato de rede ICE transmitido pelo par.
+* `CallRejected(responderConnectionId: string)`: Notificação de recusa de chamada.
+* `CallEnded(senderConnectionId: string)`: Notificação de encerramento de chamada pelo par.
+* `CallUnavailable(targetUsername: string)`: Alerta indicando que o usuário chamado está offline ou inacessível.
 
-* `JoinRoom({ Username: string, ChatRoom: string })`: Registra o usuario na sala de bate-papo especificada.
-* `SendMessage(message: string)`: Transmite uma mensagem de texto para a sala ativa.
-* `StartTyping(ChatRoom: string, Username: string)`: Sinaliza ao servidor que o usuario esta digitando.
-* `StopTyping(ChatRoom: string, Username: string)`: Sinaliza ao servidor que a digitacao do usuario foi interrompida.
-* `leaveChat()`: Invoca a interrupcao da conexao via `connection.stop()`.
+### Métodos Invocados pelo Cliente (Outbound Methods)
+
+* `JoinRoom({ Username: string, ChatRoom: string })`: Conecta e registra o usuário na sala.
+* `SendMessage(message: string)`: Envia mensagem para a sala.
+* `StartTyping(ChatRoom: string, Username: string)` / `StopTyping(...)`: Controle de digitação.
+* `CallUser(targetUsername: string, sdpOffer: string)`: Inicia oferta de chamada WebRTC 1:1.
+* `AnswerCall(callerConnectionId: string, sdpAnswer: string)`: Aceita a chamada com SDP Answer.
+* `SendIceCandidate(targetConnectionId: string, candidateJson: string)`: Envia candidato ICE para o par.
+* `RejectCall(callerConnectionId: string)`: Rejeita chamada recebida.
+* `HangUp(targetConnectionId: string)`: Encerra chamada ativa.
 
 ---
 
 ## 3. Estrutura do Projeto
 
 ```text
-Dialogue-front/
-├── public/                  # Arquivos estaticos publicos
+frontend/
+├── public/                  # Arquivos estáticos
 ├── src/
-│   ├── assets/              # Recursos visuais estaticos
-│   ├── components/          # Componentes de interface reutilizaveis
-│   │   └── dot/             # Componente de indicador de digitacao animado
-│   │       └── index.tsx
-│   ├── context/             # Gerenciamento de estado global via React Context
-│   │   └── ChatContext.tsx  # Provedor do servico de chat
-│   ├── pages/               # Paginas/Views da aplicacao
-│   │   ├── chat/            # Interface principal do bate-papo
-│   │   │   └── index.tsx
-│   │   ├── join-room/       # Formulario de ingresso em sala
-│   │   │   └── index.tsx
+│   ├── components/          # Componentes reutilizáveis
+│   │   ├── call/            # Modais de chamada WebRTC
+│   │   │   ├── IncomingCallModal.tsx # Toque e aceite/recusa de chamada
+│   │   │   └── VideoCallModal.tsx    # Vídeo remoto, PiP local e controles
+│   │   └── dot/             # Indicador animado de digitação
+│   ├── context/             # Provedor global ChatContext
+│   │   └── ChatContext.tsx
+│   ├── hooks/               # Custom hooks
+│   │   └── useWebRTC.ts     # Gerenciamento de RTCPeerConnection e streams
+│   ├── lib/                 # Configuração de clientes (TanStack Query)
+│   ├── pages/               # Páginas da aplicação
+│   │   ├── chat/            # Interface principal do chat
+│   │   ├── join-room/       # Entrada em sala com healthcheck
 │   │   └── welcome/         # Tela de boas-vindas
-│   │       └── index.tsx
-│   ├── services/            # Servicos de integracao
-│   │   └── chatService/     # Hook useChatService e integracao SignalR
-│   │       └── index.ts
-│   ├── App.tsx              # Componente raiz com definicao de rotas e providers
-│   └── main.tsx             # Ponto de entrada da aplicacao React
-├── eslint.config.js         # Configuracao do linter ESLint
-├── index.html               # Documento HTML principal
-├── package.json             # Dependencias e scripts do projeto
-├── tsconfig.json            # Configuracao principal do TypeScript
-├── tsconfig.app.json        # Configuracao TypeScript para a aplicacao
-├── tsconfig.node.json       # Configuracao TypeScript para o ambiente Node/Vite
-└── vite.config.ts           # Configuracao do empacotador Vite
+│   ├── services/            # Clientes de rede
+│   │   ├── api.ts           # Axios com resolução dinâmica de origem
+│   │   └── chatService/     # Singleton SignalR com listeners WebSockets
+│   ├── stores/              # Estado atômico Zustand
+│   │   └── useChatStore.ts  # Mensagens, presença e estado de chamadas
+│   ├── theme/               # Tema moderno Dark Slate / Índigo
+│   ├── App.tsx              # Rotas e provedores principais
+│   └── main.tsx             # Ponto de entrada React 19
+├── Dockerfile               # Multi-stage build com Nginx SPA
+├── nginx.conf               # Configuração interna de rotas SPA
+└── package.json
 ```
 
 ---
 
 ## 4. Tecnologias e Bibliotecas
 
-| Categoria | Tecnologia / Biblioteca | Versao | Finalidade |
+| Categoria | Tecnologia / Biblioteca | Versão | Finalidade |
 | :--- | :--- | :--- | :--- |
-| Linguagem | TypeScript | 5.9.x | Tipagem estatica e seguranca em tempo de compilacao |
-| Framework UI | React | 19.1.x | Construcao da interface de usuario declarativa |
-| Build Tool | Vite | 7.1.x | Empacotador e servidor de desenvolvimento de alta performance |
-| Comunicacao Real-Time | @microsoft/signalr | 9.0.x | Cliente SignalR para conexao WebSocket com o backend |
-| UI Components | Material UI (@mui/material) | 7.3.x | Sistema de componentes visuais baseados no Material Design |
-| Icones | @mui/icons-material | 7.3.x | Iconografia padrao Material Design |
-| Estilizacao | @emotion/react / @emotion/styled | 11.14.x | Engine de estilizacao CSS-in-JS |
-| Roteamento | React Router DOM | 7.9.x | Roteamento no lado do cliente (SPA) |
-| Utilitarios Visuais | react-avatar | 5.0.x | Geracao automatica de avatares com base no nome do usuario |
+| Linguagem | TypeScript | 5.9.x | Tipagem estática e segurança em tempo de compilação |
+| Framework UI | React | 19.x | Construção da interface declarativa de alta performance |
+| Build Tool | Vite | 7.x | Empacotador rápido com Hot-Module Replacement |
+| Comunicação Real-Time | @microsoft/signalr | 9.0.x | Cliente SignalR para WebSockets |
+| Chamadas P2P | WebRTC nativo | - | Áudio e vídeo 1:1 via Google STUN |
+| Gerenciamento de Estado | Zustand | 5.0.x | Streaming reativo de mensagens e estado de chamada |
+| Cache & Server State | TanStack Query | 5.66.x | Monitoramento assíncrono de saúde da API |
+| Componentes UI | Material UI | 7.3.x | Design system moderno com Dark Mode e Glassmorphism |
+| Ícones | @mui/icons-material | 7.3.x | Iconografia oficial do Material Design |
 
 ---
 
