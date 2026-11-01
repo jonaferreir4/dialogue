@@ -30,7 +30,8 @@ export function useWebRTC() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
-  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const remoteIceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const localIceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
   const targetConnectionIdRef = useRef<string | null>(null);
 
   // Mantém targetConnectionIdRef sincronizado com activeCallPeer
@@ -62,47 +63,57 @@ export function useWebRTC() {
       pcRef.current = null;
     }
 
-    iceCandidatesQueue.current = [];
+    remoteIceCandidatesQueue.current = [];
+    localIceCandidatesQueue.current = [];
     targetConnectionIdRef.current = null;
     resetCall();
   }, [resetCall]);
 
   // Inicializa o PeerConnection com callbacks padrão
-  const createPeerConnection = useCallback(
-    (targetConnId: string) => {
-      const pc = new RTCPeerConnection(RTC_CONFIG);
+  const createPeerConnection = useCallback(() => {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate && targetConnId) {
-          chatSignalR.sendIceCandidate(targetConnId, JSON.stringify(event.candidate.toJSON()));
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const destConnId = targetConnectionIdRef.current;
+        if (destConnId) {
+          chatSignalR.sendIceCandidate(destConnId, JSON.stringify(event.candidate.toJSON()));
+        } else {
+          localIceCandidatesQueue.current.push(event.candidate.toJSON());
         }
-      };
+      }
+    };
 
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          remoteStreamRef.current = event.streams[0];
-          setRemoteStream(event.streams[0]);
-        }
-      };
+    pc.ontrack = (event) => {
+      if (event.streams && event.streams[0]) {
+        remoteStreamRef.current = event.streams[0];
+        setRemoteStream(event.streams[0]);
+      }
+    };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
-          cleanupCall();
-        }
-      };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
+        cleanupCall();
+      }
+    };
 
-      pcRef.current = pc;
-      return pc;
-    },
-    [cleanupCall]
-  );
+    pcRef.current = pc;
+    return pc;
+  }, [cleanupCall]);
 
   // Iniciar chamada de vídeo para um usuário
   const startCall = useCallback(
     async (targetUsername: string) => {
       try {
+        // Tenta encontrar connectionId imediato na lista detalhada
+        const knownUser = useChatStore
+          .getState()
+          .connectedUsersDetailed.find((u) => u.username.toLowerCase() === targetUsername.toLowerCase());
+        const initialConnId = knownUser?.connectionId || "";
+
+        targetConnectionIdRef.current = initialConnId || null;
         setCallStatus("calling");
-        setActiveCallPeer({ connectionId: "", username: targetUsername });
+        setActiveCallPeer({ connectionId: initialConnId, username: targetUsername });
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
@@ -112,8 +123,7 @@ export function useWebRTC() {
         localStreamRef.current = stream;
         setLocalStream(stream);
 
-        // O backend cuidará do roteamento para a conexão do targetUsername
-        const pc = createPeerConnection("");
+        const pc = createPeerConnection();
 
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
@@ -125,9 +135,10 @@ export function useWebRTC() {
         await chatSignalR.callUser(targetUsername, JSON.stringify(offer));
       } catch (err: unknown) {
         console.error("Erro ao iniciar chamada:", err);
-        const errorMsg = err instanceof Error && err.name === "NotAllowedError"
-          ? "Permissão de câmera e microfone negada."
-          : "Não foi possível acessar seus dispositivos de mídia.";
+        const errorMsg =
+          err instanceof Error && err.name === "NotAllowedError"
+            ? "Permissão de câmera e microfone negada."
+            : "Não foi possível acessar seus dispositivos de mídia.";
         setCallError(errorMsg);
         cleanupCall();
       }
@@ -152,7 +163,7 @@ export function useWebRTC() {
       localStreamRef.current = stream;
       setLocalStream(stream);
 
-      const pc = createPeerConnection(callerConnectionId);
+      const pc = createPeerConnection();
 
       stream.getTracks().forEach((track) => {
         pc.addTrack(track, stream);
@@ -161,9 +172,9 @@ export function useWebRTC() {
       const offerDesc = JSON.parse(sdpOffer);
       await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
 
-      // Descarrega candidatos ICE acumulados enquanto a descrição remota não estava pronta
-      while (iceCandidatesQueue.current.length > 0) {
-        const candidate = iceCandidatesQueue.current.shift();
+      // Descarrega candidatos ICE remotos acumulados enquanto a descrição remota não estava pronta
+      while (remoteIceCandidatesQueue.current.length > 0) {
+        const candidate = remoteIceCandidatesQueue.current.shift();
         if (candidate) {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         }
@@ -225,7 +236,8 @@ export function useWebRTC() {
     // 1. Resposta da oferta (Caller recebe Answer do Target)
     chatSignalR.onCallAnswerReceived = async (answererConnectionId, sdpAnswer) => {
       try {
-        if (!pcRef.current) return;
+        const pc = pcRef.current;
+        if (!pc) return;
 
         targetConnectionIdRef.current = answererConnectionId;
         setActiveCallPeer({
@@ -233,20 +245,20 @@ export function useWebRTC() {
           username: activeCallPeer?.username || "Interlocutor",
         });
 
-        // Configura targetConnId para os próximos candidatos ICE locais
-        const pc = pcRef.current;
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            chatSignalR.sendIceCandidate(answererConnectionId, JSON.stringify(event.candidate.toJSON()));
-          }
-        };
-
         const answerDesc = JSON.parse(sdpAnswer);
         await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
 
-        // Descarrega candidatos ICE acumulados
-        while (iceCandidatesQueue.current.length > 0) {
-          const candidate = iceCandidatesQueue.current.shift();
+        // Descarrega candidatos ICE locais acumulados antes de ter o answererConnectionId
+        while (localIceCandidatesQueue.current.length > 0) {
+          const cand = localIceCandidatesQueue.current.shift();
+          if (cand) {
+            chatSignalR.sendIceCandidate(answererConnectionId, JSON.stringify(cand));
+          }
+        }
+
+        // Descarrega candidatos ICE remotos acumulados antes de ter a descrição remota
+        while (remoteIceCandidatesQueue.current.length > 0) {
+          const candidate = remoteIceCandidatesQueue.current.shift();
           if (candidate) {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
           }
@@ -268,7 +280,7 @@ export function useWebRTC() {
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           await pc.addIceCandidate(new RTCIceCandidate(candidateInit));
         } else {
-          iceCandidatesQueue.current.push(candidateInit);
+          remoteIceCandidatesQueue.current.push(candidateInit);
         }
       } catch (err) {
         console.error("Erro ao processar ICE Candidate:", err);
