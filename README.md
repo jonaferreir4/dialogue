@@ -107,17 +107,3 @@ npm run dev
 ```bash
 dotnet test backend/Dialogue.sln
 ```
-
----
-
-## 🤖 Desenvolvimento Assistido por IA (AI Agent Governance)
-
-Este repositório possui uma infraestrutura completa de governança para agentes de IA (Google Antigravity, Claude Code, Cursor, Copilot):
-
-| Arquivo / Diretório | Escopo | Descrição |
-| :--- | :--- | :--- |
-| **`AGENTS.md` (Raiz)** | Global | Roteador de escopo (*Scope Routing*), meta-regras de arquitetura e tabela ❌ Proibido vs ✅ Correto. |
-| **`STATUS.md` (Raiz)** | Global | Semáforo de débitos técnicos e roadmap fullstack. |
-| **`backend/AGENTS.md`** | Backend | Regras estritas de Clean Architecture, concorrência thread-safe e C# 12. |
-| **`frontend/AGENTS.md`**| Frontend | Padrões de React 19, Zustand para real-time, TanStack Query e Material UI. |
-| **`.agents/skills/`** | Compartilhado | Catálogo de skills de engenharia, concorrência em WebSockets e design systems. |
