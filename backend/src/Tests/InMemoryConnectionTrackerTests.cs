@@ -65,6 +65,39 @@ public class InMemoryConnectionTrackerTests
     }
 
     [Fact]
+    public async Task GetConnectionByUsernameAsync_ShouldReturnCorrectUserInRoom()
+    {
+        // Arrange
+        await _tracker.AddConnectionAsync("conn-alice", "Alice", "dev");
+        await _tracker.AddConnectionAsync("conn-bob", "Bob", "design");
+
+        // Act
+        var found = await _tracker.GetConnectionByUsernameAsync("dev", "Alice");
+        var notFound = await _tracker.GetConnectionByUsernameAsync("design", "Alice");
+
+        // Assert
+        found.Should().NotBeNull();
+        found!.ConnectionId.Should().Be("conn-alice");
+        notFound.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetConnectionsInRoomAsync_ShouldReturnDetailedConnectionObjects()
+    {
+        // Arrange
+        await _tracker.AddConnectionAsync("conn-1", "User1", "room-alpha");
+        await _tracker.AddConnectionAsync("conn-2", "User2", "room-alpha");
+        await _tracker.AddConnectionAsync("conn-3", "User3", "room-beta");
+
+        // Act
+        var alphaConnections = await _tracker.GetConnectionsInRoomAsync("room-alpha");
+
+        // Assert
+        alphaConnections.Should().HaveCount(2);
+        alphaConnections.Select(c => c.Username).Should().Contain(new[] { "User1", "User2" });
+    }
+
+    [Fact]
     public async Task ConcurrentAccess_ShouldNotThrowOrCorruptData()
     {
         // Arrange

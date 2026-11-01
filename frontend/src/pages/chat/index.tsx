@@ -10,13 +10,14 @@ import {
   IconButton,
   Button,
   Chip,
-  
+  Tooltip,
 } from "@mui/material";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import TagRoundedIcon from "@mui/icons-material/TagRounded";
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
+import VideocamRoundedIcon from "@mui/icons-material/VideocamRounded";
 import Avatar from "react-avatar";
 import { useNavigate } from "react-router-dom";
 import { useChat } from "../../context/ChatContext";
@@ -35,6 +36,7 @@ export function Chat() {
     typingUser,
     currentUser,
     currentRoom,
+    startCall,
   } = useChat();
 
   const [input, setInput] = useState("");
@@ -121,6 +123,29 @@ export function Chat() {
               return (
                 <ListItem
                   key={user}
+                  secondaryAction={
+                    !isMe ? (
+                      <Tooltip title={`Iniciar chamada de vídeo com ${user}`}>
+                        <IconButton
+                          edge="end"
+                          size="small"
+                          onClick={() => startCall(user)}
+                          sx={{
+                            display: { xs: "none", sm: "inline-flex" },
+                            color: "primary.main",
+                            bgcolor: "rgba(99, 102, 241, 0.08)",
+                            "&:hover": {
+                              bgcolor: "rgba(99, 102, 241, 0.2)",
+                              transform: "scale(1.08)",
+                            },
+                            transition: "all 0.15s ease-in-out",
+                          }}
+                        >
+                          <VideocamRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : undefined
+                  }
                   sx={{
                     borderRadius: 2,
                     mb: 0.5,
@@ -130,7 +155,16 @@ export function Chat() {
                     "&:hover": { bgcolor: "rgba(255, 255, 255, 0.03)" },
                   }}
                 >
-                  <Box sx={{ position: "relative", mr: { xs: 0, sm: 1.5 } }}>
+                  <Box
+                    onClick={() => {
+                      if (!isMe) startCall(user);
+                    }}
+                    sx={{
+                      position: "relative",
+                      mr: { xs: 0, sm: 1.5 },
+                      cursor: !isMe ? "pointer" : "default",
+                    }}
+                  >
                     <Avatar name={user} size="32" round textSizeRatio={2} />
                     <FiberManualRecordRoundedIcon
                       sx={{

@@ -1,10 +1,17 @@
 import * as signalR from "@microsoft/signalr";
-import { useChatStore, type ChatMessage } from "../../stores/useChatStore";
+import { useChatStore, type ChatMessage, type ConnectedUserDetailed } from "../../stores/useChatStore";
 import { API_URL } from "../api";
 
 class ChatSignalRService {
   private connection: signalR.HubConnection | null = null;
   private typingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // WebRTC callbacks
+  public onCallAnswerReceived?: (answererConnectionId: string, sdpAnswer: string) => void;
+  public onIceCandidateReceived?: (senderConnectionId: string, candidateJson: string) => void;
+  public onCallEnded?: (senderConnectionId: string) => void;
+  public onCallRejected?: (responderConnectionId: string) => void;
+  public onCallUnavailable?: (targetUsername: string) => void;
 
   public async initConnection(): Promise<signalR.HubConnection> {
     if (this.connection && this.connection.state !== signalR.HubConnectionState.Disconnected) {
@@ -57,6 +64,10 @@ class ChatSignalRService {
       useChatStore.getState().setConnectedUsers(users);
     });
 
+    conn.on("ConnectedUsersDetailed", (connections: ConnectedUserDetailed[]) => {
+      useChatStore.getState().setConnectedUsersDetailed(connections);
+    });
+
     conn.on("UserTyping", (username: string) => {
       const myUsername = useChatStore.getState().currentUser;
       if (username !== myUsername) {
@@ -66,6 +77,53 @@ class ChatSignalRService {
 
     conn.on("UserStopTyping", (_username: string) => {
       useChatStore.getState().setTypingUser(null);
+    });
+
+    // WebRTC Signaling Events
+    conn.on("ReceiveCallOffer", (callerConnectionId: string, callerUsername: string, sdpOffer: string) => {
+      const { callStatus } = useChatStore.getState();
+      if (callStatus !== "idle") {
+        this.rejectCall(callerConnectionId);
+        return;
+      }
+      useChatStore.getState().setPendingOffer({ callerConnectionId, callerUsername, sdpOffer });
+      useChatStore.getState().setCallStatus("receiving");
+    });
+
+    conn.on("ReceiveCallAnswer", (answererConnectionId: string, sdpAnswer: string) => {
+      if (this.onCallAnswerReceived) {
+        this.onCallAnswerReceived(answererConnectionId, sdpAnswer);
+      }
+    });
+
+    conn.on("ReceiveIceCandidate", (senderConnectionId: string, candidateJson: string) => {
+      if (this.onIceCandidateReceived) {
+        this.onIceCandidateReceived(senderConnectionId, candidateJson);
+      }
+    });
+
+    conn.on("CallRejected", (responderConnectionId: string) => {
+      if (this.onCallRejected) {
+        this.onCallRejected(responderConnectionId);
+      }
+      useChatStore.getState().setCallError("Chamada recusada pelo usuário.");
+      useChatStore.getState().resetCall();
+    });
+
+    conn.on("CallEnded", (senderConnectionId: string) => {
+      if (this.onCallEnded) {
+        this.onCallEnded(senderConnectionId);
+      }
+      useChatStore.getState().setCallError("Chamada encerrada.");
+      useChatStore.getState().resetCall();
+    });
+
+    conn.on("CallUnavailable", (targetUsername: string) => {
+      if (this.onCallUnavailable) {
+        this.onCallUnavailable(targetUsername);
+      }
+      useChatStore.getState().setCallError(`Usuário "${targetUsername}" não está disponível ou offline.`);
+      useChatStore.getState().resetCall();
     });
 
     conn.onreconnecting((error) => {
@@ -142,6 +200,32 @@ class ChatSignalRService {
     }
   }
 
+  // WebRTC Hub Invocations
+  public async callUser(targetUsername: string, sdpOffer: string): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    await this.connection.invoke("CallUser", targetUsername, sdpOffer);
+  }
+
+  public async answerCall(callerConnectionId: string, sdpAnswer: string): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    await this.connection.invoke("AnswerCall", callerConnectionId, sdpAnswer);
+  }
+
+  public async sendIceCandidate(targetConnectionId: string, candidateJson: string): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    await this.connection.invoke("SendIceCandidate", targetConnectionId, candidateJson);
+  }
+
+  public async rejectCall(callerConnectionId: string): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    await this.connection.invoke("RejectCall", callerConnectionId);
+  }
+
+  public async hangUp(targetConnectionId: string): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    await this.connection.invoke("HangUp", targetConnectionId);
+  }
+
   public async leaveChat(): Promise<void> {
     if (this.connection) {
       try {
@@ -156,3 +240,4 @@ class ChatSignalRService {
 }
 
 export const chatSignalR = new ChatSignalRService();
+

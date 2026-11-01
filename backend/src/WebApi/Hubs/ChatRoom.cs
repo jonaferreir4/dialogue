@@ -90,9 +90,12 @@ public class ChatRoom(IConnectionTracker connectionTracker, ILogger<ChatRoom> lo
             return;
         }
 
-        var users = await _connectionTracker.GetUsersInRoomAsync(chatRoom.Trim());
-        await Clients.Group(chatRoom.Trim())
-            .SendAsync("ConnectedUser", users.ToArray());
+        var room = chatRoom.Trim();
+        var users = await _connectionTracker.GetUsersInRoomAsync(room);
+        var connections = await _connectionTracker.GetConnectionsInRoomAsync(room);
+
+        await Clients.Group(room).SendAsync("ConnectedUser", users.ToArray());
+        await Clients.Group(room).SendAsync("ConnectedUsersDetailed", connections.ToArray());
     }
 
     public async Task StartTyping(string chatRoom, string username)
@@ -113,5 +116,83 @@ public class ChatRoom(IConnectionTracker connectionTracker, ILogger<ChatRoom> lo
         }
 
         await Clients.OthersInGroup(chatRoom.Trim()).SendAsync("UserStopTyping", username.Trim());
+    }
+
+    public async Task CallUser(string targetUsername, string sdpOffer)
+    {
+        if (string.IsNullOrWhiteSpace(targetUsername) || string.IsNullOrWhiteSpace(sdpOffer))
+        {
+            return;
+        }
+
+        var caller = await _connectionTracker.GetConnectionAsync(Context.ConnectionId);
+        if (caller is null)
+        {
+            _logger.LogWarning("CallUser rejeitado: conexão chamadora não encontrada {ConnectionId}", Context.ConnectionId);
+            return;
+        }
+
+        var target = await _connectionTracker.GetConnectionByUsernameAsync(caller.ChatRoom, targetUsername.Trim());
+        if (target is null)
+        {
+            _logger.LogWarning("CallUser: destinatário {TargetUsername} não encontrado na sala {ChatRoom}", targetUsername, caller.ChatRoom);
+            await Clients.Caller.SendAsync("CallUnavailable", targetUsername);
+            return;
+        }
+
+        _logger.LogInformation("Sinal de chamada: {Caller} -> {Target} (ConnId: {TargetConnId})", caller.Username, target.Username, target.ConnectionId);
+
+        await Clients.Client(target.ConnectionId)
+            .SendAsync("ReceiveCallOffer", Context.ConnectionId, caller.Username, sdpOffer);
+    }
+
+    public async Task AnswerCall(string callerConnectionId, string sdpAnswer)
+    {
+        if (string.IsNullOrWhiteSpace(callerConnectionId) || string.IsNullOrWhiteSpace(sdpAnswer))
+        {
+            return;
+        }
+
+        var answerer = await _connectionTracker.GetConnectionAsync(Context.ConnectionId);
+        _logger.LogInformation("Chamada atendida por {Answerer} para {CallerConnId}", answerer?.Username, callerConnectionId);
+
+        await Clients.Client(callerConnectionId)
+            .SendAsync("ReceiveCallAnswer", Context.ConnectionId, sdpAnswer);
+    }
+
+    public async Task SendIceCandidate(string targetConnectionId, string candidateJson)
+    {
+        if (string.IsNullOrWhiteSpace(targetConnectionId) || string.IsNullOrWhiteSpace(candidateJson))
+        {
+            return;
+        }
+
+        await Clients.Client(targetConnectionId)
+            .SendAsync("ReceiveIceCandidate", Context.ConnectionId, candidateJson);
+    }
+
+    public async Task RejectCall(string callerConnectionId)
+    {
+        if (string.IsNullOrWhiteSpace(callerConnectionId))
+        {
+            return;
+        }
+
+        var rejecter = await _connectionTracker.GetConnectionAsync(Context.ConnectionId);
+        _logger.LogInformation("Chamada rejeitada por {Rejecter} para {CallerConnId}", rejecter?.Username, callerConnectionId);
+
+        await Clients.Client(callerConnectionId)
+            .SendAsync("CallRejected", Context.ConnectionId);
+    }
+
+    public async Task HangUp(string targetConnectionId)
+    {
+        if (string.IsNullOrWhiteSpace(targetConnectionId))
+        {
+            return;
+        }
+
+        await Clients.Client(targetConnectionId)
+            .SendAsync("CallEnded", Context.ConnectionId);
     }
 }

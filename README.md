@@ -4,6 +4,13 @@ Plataforma de comunicação em tempo real de alta performance, projetada com arq
 
 Construída com **.NET 8 (Clean Architecture & ASP.NET Core SignalR)** no backend e **React 19 (TypeScript, Material UI, TanStack Query e Zustand)** no frontend.
 
+### ✨ Funcionalidades Principais
+- 💬 **Mensageria em Tempo Real**: WebSockets de baixa latência via ASP.NET Core SignalR com auto-reconnect, indicadores de digitação (typing indicator) e IDs canônicos para deduplicação.
+- 📹 **Chamadas de Áudio e Vídeo 1:1 (WebRTC)**: Sinalização P2P no SignalR Hub (troca de SDP Offer/Answer e candidatos ICE via STUN), com modal Picture-in-Picture espelhado e controles de mudo/câmera.
+- 🛡️ **Concorrência Thread-Safe**: Rastreamento de conexões distribuídas via `IConnectionTracker` e `ConcurrentDictionary`, desacoplado do ciclo de vida transiente dos Hubs.
+- 🧪 **Qualidade e Testes Automatizados**: Suíte de testes unitários e de concorrência com xUnit, Moq e FluentAssertions garantindo estabilidade contínua.
+- 🐳 **Deploy com Docker Compose**: Gateway Nginx unificando rotas de API, WebSockets e SPA sob a mesma porta com zero problemas de CORS.
+
 ---
 
 ## 🏛️ Arquitetura do Monorepo

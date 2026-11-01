@@ -27,6 +27,14 @@ public class InMemoryConnectionTracker : IConnectionTracker
         return Task.FromResult(user);
     }
 
+    public Task<ConnectedUserDto?> GetConnectionByUsernameAsync(string chatRoom, string username, CancellationToken cancellationToken = default)
+    {
+        var user = _connections.Values
+            .FirstOrDefault(u => string.Equals(u.ChatRoom, chatRoom, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(user);
+    }
+
     public Task<IReadOnlyList<string>> GetUsersInRoomAsync(string chatRoom, CancellationToken cancellationToken = default)
     {
         var users = _connections.Values
@@ -36,5 +44,14 @@ public class InMemoryConnectionTracker : IConnectionTracker
             .ToList();
 
         return Task.FromResult<IReadOnlyList<string>>(users);
+    }
+
+    public Task<IReadOnlyList<ConnectedUserDto>> GetConnectionsInRoomAsync(string chatRoom, CancellationToken cancellationToken = default)
+    {
+        var connections = _connections.Values
+            .Where(u => string.Equals(u.ChatRoom, chatRoom, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<ConnectedUserDto>>(connections);
     }
 }

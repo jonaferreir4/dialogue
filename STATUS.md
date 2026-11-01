@@ -40,10 +40,13 @@ Este arquivo consolida o progresso de implementação, a arquitetura monorepo un
 
 ## 🚀 Próximos Passos (Roadmap de Alta Complexidade)
 
-### Fase 1: Chamadas de Áudio e Vídeo 1:1 (WebRTC)
-- [ ] Sinalização WebRTC no Hub SignalR (`SendCallOffer`, `SendCallAnswer`, `SendIceCandidate`, `HangUp`).
-- [ ] Hook `useWebRTC` no frontend com `RTCPeerConnection` e `getUserMedia`.
-- [ ] Modal de chamada com miniatura Picture-in-Picture, controles de mute de microfone, câmera on/off e encerrar.
+### Fase 1: Chamadas de Áudio e Vídeo 1:1 (WebRTC) — Resolvido ✅
+- [x] **Sinalização WebRTC no Hub SignalR**: Métodos `CallUser`, `AnswerCall`, `SendIceCandidate`, `RejectCall`, `HangUp` e broadcast `ConnectedUsersDetailed` com 18 testes unitários xUnit passando.
+- [x] **Hook `useWebRTC` no Frontend**: Gerenciamento completo de `RTCPeerConnection`, `getUserMedia`, STUN servers e bufferização de candidatos ICE.
+- [x] **Componentes e Modais UI**:
+  - `IncomingCallModal`: Diálogo com animação pulsante para aceitar ou recusar chamada.
+  - `VideoCallModal`: Vídeo remoto expansivo, miniatura local Picture-in-Picture espelhada e barra flutuante em glassmorphism (mutar áudio, desligar câmera, encerrar).
+- [x] **Disparo na Barra Lateral**: Ações de chamada rápida ao lado de cada usuário online.
 
 ### Fase 2: Escalabilidade Horizontal & Persistência
 - [ ] **Redis Backplane**: Suporte a múltiplas réplicas do backend via `Microsoft.AspNetCore.SignalR.StackExchangeRedis`.

@@ -7,5 +7,7 @@ public interface IConnectionTracker
     Task AddConnectionAsync(string connectionId, string username, string chatRoom, CancellationToken cancellationToken = default);
     Task<ConnectedUserDto?> RemoveConnectionAsync(string connectionId, CancellationToken cancellationToken = default);
     Task<ConnectedUserDto?> GetConnectionAsync(string connectionId, CancellationToken cancellationToken = default);
+    Task<ConnectedUserDto?> GetConnectionByUsernameAsync(string chatRoom, string username, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>> GetUsersInRoomAsync(string chatRoom, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ConnectedUserDto>> GetConnectionsInRoomAsync(string chatRoom, CancellationToken cancellationToken = default);
 }
