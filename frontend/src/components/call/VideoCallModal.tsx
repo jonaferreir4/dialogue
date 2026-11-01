@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Dialog,
   Box,
@@ -14,6 +14,47 @@ import MicOffRoundedIcon from "@mui/icons-material/MicOffRounded";
 import CallEndRoundedIcon from "@mui/icons-material/CallEndRounded";
 import Avatar from "react-avatar";
 import { useChatStore } from "../../stores/useChatStore";
+
+interface VideoPlayerProps {
+  stream: MediaStream | null;
+  isMuted?: boolean;
+  isMirrored?: boolean;
+  style?: React.CSSProperties;
+}
+
+function VideoPlayer({ stream, isMuted = false, isMirrored = false, style }: VideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream) {
+      video.srcObject = stream;
+      video.play().catch((err) => {
+        console.warn("Autoplay bloqueado ou aguardando interação do usuário:", err);
+      });
+    } else {
+      video.srcObject = null;
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted={isMuted}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        transform: isMirrored ? "scaleX(-1)" : undefined,
+        ...style,
+      }}
+    />
+  );
+}
 
 interface VideoCallModalProps {
   localStream: MediaStream | null;
@@ -35,28 +76,12 @@ export function VideoCallModal({
   const isAudioMuted = useChatStore((s) => s.isAudioMuted);
   const isVideoDisabled = useChatStore((s) => s.isVideoDisabled);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-
   const isOpen = callStatus === "calling" || callStatus === "in-call";
-
-  // Vincula localStream ao elemento HTMLVideoElement
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream, isOpen]);
-
-  // Vincula remoteStream ao elemento HTMLVideoElement
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
-  }, [remoteStream, isOpen]);
 
   if (!isOpen) return null;
 
   const peerName = activeCallPeer?.username || "Interlocutor";
+  const hasRemoteVideo = !!remoteStream && remoteStream.getVideoTracks().length > 0;
 
   return (
     <Dialog
@@ -91,16 +116,11 @@ export function VideoCallModal({
           overflow: "hidden",
         }}
       >
-        {remoteStream ? (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
+        {hasRemoteVideo ? (
+          <VideoPlayer
+            stream={remoteStream}
+            isMuted={false}
+            isMirrored={false}
           />
         ) : (
           <Box
@@ -154,6 +174,7 @@ export function VideoCallModal({
             py: 0.8,
             borderRadius: 3,
             border: "1px solid rgba(255, 255, 255, 0.1)",
+            zIndex: 10,
           }}
         >
           <Box
@@ -185,23 +206,16 @@ export function VideoCallModal({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 10,
+            zIndex: 20,
           }}
         >
-          {isVideoDisabled ? (
+          {isVideoDisabled || !localStream ? (
             <VideocamOffRoundedIcon sx={{ color: "text.secondary", fontSize: 32 }} />
           ) : (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: "scaleX(-1)", // Efeito espelho para a própria câmera
-              }}
+            <VideoPlayer
+              stream={localStream}
+              isMuted={true}
+              isMirrored={true}
             />
           )}
         </Box>
@@ -222,7 +236,7 @@ export function VideoCallModal({
             py: 1,
             borderRadius: 6,
             border: "1px solid rgba(255, 255, 255, 0.12)",
-            zIndex: 20,
+            zIndex: 30,
           }}
         >
           {/* Mudo / Microfone */}

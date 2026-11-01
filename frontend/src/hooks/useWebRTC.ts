@@ -85,10 +85,27 @@ export function useWebRTC() {
     };
 
     pc.ontrack = (event) => {
-      if (event.streams && event.streams[0]) {
-        remoteStreamRef.current = event.streams[0];
-        setRemoteStream(event.streams[0]);
+      const incomingStream = event.streams && event.streams[0] ? event.streams[0] : null;
+      let stream = remoteStreamRef.current;
+
+      if (incomingStream) {
+        stream = incomingStream;
+      } else {
+        if (!stream) {
+          stream = new MediaStream();
+        }
+        stream.addTrack(event.track);
       }
+
+      remoteStreamRef.current = stream;
+      // Clona/cria nova instância para forçar atualização no React a cada track (áudio e vídeo)
+      setRemoteStream(new MediaStream(stream.getTracks()));
+
+      event.track.onunmute = () => {
+        if (remoteStreamRef.current) {
+          setRemoteStream(new MediaStream(remoteStreamRef.current.getTracks()));
+        }
+      };
     };
 
     pc.onconnectionstatechange = () => {
