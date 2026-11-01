@@ -1,111 +1,101 @@
-# AGENTS.md — Regras para Agentes de IA (Dialogue - Backend Real-Time)
+# Global AI Agent Guidelines & Architecture Map — Dialogue Monorepo
 
-Este arquivo define **regras rígidas e invioláveis** para qualquer agente de IA (Google Antigravity, Claude Code, Cursor, Copilot, ChatGPT, Gemini etc.) que opere sobre este repositório (`Dialogue`). As regras aqui são de cumprimento obrigatório e têm prioridade sobre instruções gerais de prompt.
+Welcome AI Assistant (Google Antigravity, Claude Code, Cursor, Copilot, ChatGPT, Gemini etc.). This repository houses **Dialogue**, a high-performance real-time fullstack communication platform built with **.NET 8 (Clean Architecture & SignalR)** and **React 19 (Material UI, TanStack Query, Zustand)**.
 
 ---
 
 ## 0. Meta-regra
 
-> **Quando em dúvida, não faça.** Pergunte ao desenvolvedor antes de tomar uma decisão arquitetural que não esteja coberta por estas regras. É preferível uma pergunta a um commit que quebra a integridade do domínio ou das camadas da aplicação.
+> **Quando em dúvida, não faça.** Pergunte ao desenvolvedor antes de tomar uma decisão arquitetural que viole as fronteiras de camadas no backend ou o fluxo unidirecional de dados no frontend.
 
 ---
 
-## 1. Arquitetura e Estrutura de Camadas (Clean Architecture)
-
-A solução segue rigorosamente os princípios da **Clean Architecture** e **Domain-Driven Design (DDD)**:
+## 🏛️ Monorepo Overview & Scope Directory
 
 ```
 Dialogue/
 ├── .agents/
-│   ├── skills.json
+│   ├── skills.json                   # Descoberta de skills do monorepo
 │   └── skills/
-│       ├── dialogue-signalr-realtime/
-│       └── vendor/
+│       ├── dialogue-signalr-realtime/# Skill de SignalR backend (concorrência, sockets)
+│       ├── dialogue-realtime-client/ # Skill de SignalR client (React 19, reconnection)
+│       └── vendor/                   # Skills consolidadas de engenharia
 │           ├── csharp-dotnet-best-practices/
 │           ├── dotnet-clean-architecture/
 │           ├── solid-clean-code/
+│           ├── frontend-senior/
+│           ├── ui-ux-design-system/
 │           ├── security-and-hardening/
 │           ├── performance-optimization/
-│           ├── xunit-testing-best-practices/
-│           └── scalability-and-high-availability/
-├── src/
-│   ├── Domain/          # Entidades puras, Value Objects, Enums (Sem dependências externas)
-│   ├── Application/     # Use Cases, DTOs (Records), Interfaces de serviços e repositórios
-│   ├── Infraestructure/ # Persistência, Cache (Redis), mensageria e integrações
-│   ├── WebApi/          # Hubs SignalR, Controllers HTTP, Middlewares, DI (Program.cs)
-│   └── Tests/           # Testes unitários e de integração com xUnit
-├── DockerFile           # Build multi-stage para container
-├── docker-compose.yml   # Orquestração do backend + Nginx / Redis
-└── Dialogue.sln         # Solução .NET 8
+│           └── xunit-testing-best-practices/
+├── backend/                          # .NET 8 Web API (Clean Architecture & DDD)
+│   ├── Dialogue.sln
+│   ├── Dockerfile
+│   └── src/
+│       ├── Domain/                   # Entidades puras e regras de negócio
+│       ├── Application/              # Use Cases, DTOs (Records), Interfaces
+│       ├── Infraestructure/          # Implementações, Serviços de Conexão, DI
+│       ├── WebApi/                   # Hubs SignalR, Controllers, Program.cs
+│       └── Tests/                    # Testes unitários com xUnit, Moq e FluentAssertions
+├── frontend/                         # React 19 + TypeScript + Vite + MUI v7
+│   ├── src/
+│   │   ├── components/               # Componentes UI (TypingIndicator, etc.)
+│   │   ├── context/                  # Contextos de aplicação
+│   │   ├── lib/                      # QueryClient do TanStack Query
+│   │   ├── pages/                    # Welcome, JoinRoom, Chat
+│   │   ├── services/                 # SignalR Client e API Axios
+│   │   ├── stores/                   # Stores atômicos Zustand (useChatStore)
+│   │   └── theme/                    # Tema moderno Dark/Slate
+│   ├── Dockerfile                    # Multi-stage build com Nginx SPA
+│   ├── nginx.conf                    # Nginx interno do SPA
+│   └── package.json
+├── nginx/
+│   └── nginx.conf                    # Proxy reverso orquestrador (WebSockets + SPA)
+├── docker-compose.yml                # Orquestração (backend + frontend + nginx)
+├── AGENTS.md                         # Este arquivo de governança
+└── STATUS.md                         # Roadmap unificado e débito técnico
 ```
 
-### 1.1 Regras de Dependência entre Projetos
-- **`Domain`**: **NUNCA** referencia nenhum outro projeto da solução, nem pacotes de terceiros de infraestrutura ou EF Core.
-- **`Application`**: Referencia apenas `Domain`. Contém contratos (`Interfaces`) e DTOs.
-- **`Infraestructure`**: Referencia `Application` (e transitivamente `Domain`). Implementa as interfaces de repositório, persistência e serviços externos.
-- **`WebApi`**: Referencia `Application` e `Infraestructure` para composição da Injeção de Dependência no `Program.cs`. Os Hubs e Controllers devem consumir **apenas interfaces** da camada `Application`.
+### Scope Routing Instructions for AI Agents
+- Quando estiver trabalhando no **Backend C# / .NET** (`/backend`), siga as regras de Clean Architecture, concorrência thread-safe com `ConcurrentDictionary`/`IConnectionTracker`, DTOs imutáveis, e timestamps UTC.
+- Quando estiver trabalhando no **Frontend React** (`/frontend`), siga os padrões do Zustand para tempo real, TanStack Query para estado de servidor, Material UI customizado e auto-scroll suave.
+- Ao alterar contratos de comunicação (eventos do Hub SignalR), **sempre atualize ambos os lados (backend e frontend) no mesmo ciclo**.
 
 ---
 
-## 2. Regras Específicas para SignalR e Tempo Real
+## 📐 Regras de Engenharia Invioláveis
 
-### 2.1 Concorrência e Gerenciamento de Estado
-- Instâncias de `Hub` são **transitórias**. Nunca declare estado mutável em campos normais do Hub.
-- **NUNCA** utilizar `Dictionary<TKey, TValue>` compartilhado em Singleton. **SEMPRE** utilizar coleções thread-safe como `ConcurrentDictionary<TKey, TValue>` ou um serviço rastreador isolado (`IConnectionTracker`).
-- Para suporte a múltiplas instâncias (scale-out), preparar e preferir o **Redis Backplane** (`Microsoft.AspNetCore.SignalR.StackExchangeRedis`).
+### 1. Backend (.NET 8 & C# 12)
+- **Dependências Estritas**: `Domain` (zero dependências) <- `Application` <- `Infraestructure` <- `WebApi`.
+- **Concorrência Segura**: Hubs SignalR são transitórios. Nunca use `Dictionary` não-thread-safe como singleton. Sempre use `ConcurrentDictionary` ou abstrações como `IConnectionTracker`.
+- **Contratos e DTOs**: Nunca passe entidades de `Domain` como parâmetros de métodos do Hub. Use `records` imutáveis.
+- **Timestamps**: Sempre use `DateTime.UtcNow`. Nunca use `DateTime.Now`.
+- **Identificadores**: Mensagens devem conter `Guid Id` para permitir deduplicação no frontend.
+- **Testes**: Sempre validar que `dotnet test backend/Dialogue.sln` passa com 0 erros e 0 warnings.
 
-### 2.2 Contratos e DTOs (Lições canônicas de WebSockets)
-- **NUNCA** passar entidades do `Domain` diretamente como argumentos ou retornos de Hubs SignalR.
-- **SEMPRE** utilizar `records` imutáveis como DTOs.
-- Mensagens de chat **DEVEM** conter:
-  1. Identificador único imutável (`Guid Id`) para permitir deduplicação no cliente.
-  2. Timestamp padronizado em **UTC** (`DateTime.UtcNow`). **NUNCA** usar `DateTime.Now`.
-- Sanitizar e validar entradas de texto (tamanho máximo, conteúdo não vazio, sem tags perigosas).
-
----
-
-## 3. Qualidade de Código C# 12 & .NET 8
-
-### 3.1 Nulabilidade e Tipagem
-- Manter `<Nullable>enable</Nullable>` ativo em todos os projetos.
-- Tratar avisos de compilação (CS8600, CS8602, CS8604, etc.) explicitamente, sem supressões levianas (`!`).
-- **NUNCA** adicionar pacotes legados do .NET Framework (como `Microsoft.AspNet.SignalR`). O SignalR no .NET 8 é nativo via `Microsoft.AspNetCore.App`.
-
-### 3.2 Programação Assíncrona (`async` / `await`)
-- Todas as operações I/O devem ser assíncronas (`async Task<T>`).
-- **NUNCA** usar `.Result`, `.Wait()` ou `.GetAwaiter().GetResult()`.
-- Aceitar e repassar `CancellationToken` quando aplicável.
-
-### 3.3 Injeção de Dependência (DI)
-- Injetar dependências via construtor (preferir *Primary Constructors* do C# 12 onde for limpo).
-- **NUNCA** instanciar services com `new` dentro de Hubs ou Controllers.
+### 2. Frontend (React 19 & TypeScript)
+- **Conexão SignalR**: Nunca use URLs hardcoded (`http://localhost:5000`). Consuma `import.meta.env.VITE_API_URL`.
+- **Zustand vs TanStack Query**: Zustand gerencia streaming de tempo real (mensagens, presença, digitação); TanStack Query gerencia dados REST e cache de servidor.
+- **Limpeza de Eventos**: Sempre limpe listeners de eventos (`connection.off(...)`) no cleanup de efeitos.
+- **Chaves de Lista**: Nunca use `key={index}` na lista de mensagens; use `key={msg.id}`.
 
 ---
 
-## 4. Testes Automatizados Obrigatórios
-
-- Qualquer nova regra de negócio em `Application` ou alteração no Hub SignalR deve ser acompanhada de testes unitários em `src/Tests/`.
-- Utilizar **xUnit**, **Moq** / **NSubstitute** e **FluentAssertions**.
-- Não submeter código sem verificar que `dotnet test` e `dotnet build` executam com **0 erros e 0 warnings**.
-
----
-
-## 5. Tabela: ❌ Proibido vs ✅ Correto
+## ❌ Proibido vs ✅ Correto
 
 | ❌ Proibido | ✅ Correto |
 |---|---|
 | Pacote `Microsoft.AspNet.SignalR` no csproj | SignalR nativo do ASP.NET Core (`Microsoft.AspNetCore.SignalR`) |
 | `Dictionary<string, User>` como Singleton | `ConcurrentDictionary<string, ConnectedUserDto>` ou `IConnectionTracker` |
-| `JoinRoom(User user)` usando entidade de domínio | `JoinRoom(JoinRoomRequest request)` usando DTO imutável |
+| `JoinRoom(User user)` usando entidade | `JoinRoom(JoinRoomRequest request)` usando DTO imutável |
 | `DateTime.Now` no envio de mensagens | `DateTime.UtcNow` |
-| `WebApi` chamar `Domain` diretamente sem `Application` | `WebApi` consome `IApplicationService` |
-| `COPY --from=buld` ou `publish -c debug` no Dockerfile | `COPY --from=build` e `publish -c Release` |
-| `webapi` e `nginx` com dependência circular no compose | `nginx` depende de `webapi` |
+| `http://localhost:5000/chat` hardcoded no front | `import.meta.env.VITE_API_URL + '/chat'` |
+| `<TypingIndicator typingUser={myUsername}/>` | `<TypingIndicator typingUser={remoteTypingUser}/>` |
+| Submeter código sem testar compilação | Executar `dotnet test` e `npm run build` com 0 erros |
 
 ---
 
-## 6. Convenções de Git e Commits
-
+## 📦 Convenções de Git e Commits
 Seguir o padrão **Conventional Commits**:
 - `feat:` Nova funcionalidade
 - `fix:` Correção de bug
