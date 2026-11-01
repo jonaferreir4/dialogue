@@ -1,18 +1,30 @@
 import axios from "axios";
 
 const getApiUrl = (): string => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
+  const envUrl = import.meta.env.VITE_API_URL;
+
   if (typeof window !== "undefined") {
-    // No dev server local do Vite (porta 5173), consome backend na porta 5000 do mesmo host/IP
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+    // Se estiver no dev server local do Vite (porta 5173), consome backend na porta 5000
     if (window.location.port === "5173") {
       return `${window.location.protocol}//${window.location.hostname}:5000`;
     }
-    // Em produção, Docker Nginx (porta 8080) ou Tunnels HTTPS (Cloudflare/Ngrok), usa o mesmo origin
+
+    // Se acessado via HTTPS (Cloudflare Tunnel), IP de rede (celular) ou porta 8080 (Nginx Gateway),
+    // sempre utiliza a mesma origem da página para passar pelo proxy reverso do Nginx
+    if (!isLocalhost || window.location.protocol === "https:" || window.location.port === "8080") {
+      return window.location.origin;
+    }
+
+    if (envUrl && envUrl.trim() !== "") {
+      return envUrl;
+    }
+
     return window.location.origin;
   }
-  return "http://localhost:5000";
+
+  return envUrl || "http://localhost:5000";
 };
 
 export const API_URL = getApiUrl();
