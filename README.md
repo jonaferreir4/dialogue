@@ -55,11 +55,12 @@ O sistema utiliza um **Nginx Gateway** como proxy reverso frontal para unificar 
 
 ```mermaid
 flowchart TD
-    User([Navegador / Usuário]) -->|http://localhost:8080| Nginx[Nginx Gateway :8080]
+    User["Navegador / Usuário"] -->|"http://localhost:8080"| Nginx["Nginx Gateway :8080"]
 
-    subgraph Docker Network
-        Nginx -->|/chat (WebSockets) & /health| Backend[Backend WebApi :8080]
-        Nginx -->|/ (HTML, JS, Assets estáticos)| Frontend[Frontend SPA :80]
+    subgraph DockerNetwork ["Rede Interna Docker"]
+        Nginx -->|"/chat (WebSockets)"| Backend["Backend WebApi :8080"]
+        Nginx -->|"/health"| Backend
+        Nginx -->|"/"| Frontend["Frontend SPA :80"]
     end
 ```
 
