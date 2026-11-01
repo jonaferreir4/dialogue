@@ -1,61 +1,117 @@
-using Domain.Entities;
-using Microsoft.AspNetCore.SignalR; 
+using Application.DTOs;
+using Application.Interfaces;
+using Microsoft.AspNetCore.SignalR;
 
 namespace WebApi.Hubs;
 
-public class ChatRoom(IDictionary<string, User> connections) : Hub
+public class ChatRoom(IConnectionTracker connectionTracker, ILogger<ChatRoom> logger) : Hub
 {
+    private readonly IConnectionTracker _connectionTracker = connectionTracker;
+    private readonly ILogger<ChatRoom> _logger = logger;
 
-    private readonly IDictionary<string, User> _connections = connections;
-
-    public async Task JoinRoom(User user) // Method to join a chat room
+    public async Task JoinRoom(JoinRoomRequest request)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, user.ChatRoom!);
-        _connections[Context.ConnectionId] = user;
-        await Clients.Group(user.ChatRoom!)
-            .SendAsync("ReceiveMessage", "system", $"{user.Username} has join the Group", DateTime.Now);
-        await SendConnectedUser(user.ChatRoom!);
-    }
-    public async Task SendMessage(string message) // Method to send a message to the chat room
-    {
-        if (_connections.TryGetValue(Context.ConnectionId, out User user))
+        if (request is null || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.ChatRoom))
         {
-            await Clients.Group(user.ChatRoom!)
-                .SendAsync("ReceiveMessage", user.Username, message, DateTime.Now);
+            _logger.LogWarning("Tentativa de JoinRoom com dados inválidos da conexão {ConnectionId}", Context.ConnectionId);
+            return;
+        }
+
+        var username = request.Username.Trim();
+        var chatRoom = request.ChatRoom.Trim();
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, chatRoom);
+        await _connectionTracker.AddConnectionAsync(Context.ConnectionId, username, chatRoom);
+
+        var timestamp = DateTime.UtcNow;
+        var messageId = Guid.NewGuid();
+
+        await Clients.Group(chatRoom)
+            .SendAsync("ReceiveMessage", "system", $"{username} has joined the room", timestamp, messageId);
+
+        await SendConnectedUser(chatRoom);
+
+        _logger.LogInformation("Usuário {Username} entrou na sala {ChatRoom} (Conexão: {ConnectionId})", username, chatRoom, Context.ConnectionId);
+    }
+
+    public async Task SendMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        var sanitizedMessage = message.Length > 2000 ? message[..2000] : message;
+        var user = await _connectionTracker.GetConnectionAsync(Context.ConnectionId);
+
+        if (user is not null)
+        {
+            var timestamp = DateTime.UtcNow;
+            var messageId = Guid.NewGuid();
+
+            await Clients.Group(user.ChatRoom)
+                .SendAsync("ReceiveMessage", user.Username, sanitizedMessage, timestamp, messageId);
+
+            _logger.LogDebug("Mensagem enviada por {Username} na sala {ChatRoom}", user.Username, user.ChatRoom);
+        }
+        else
+        {
+            _logger.LogWarning("Tentativa de envio de mensagem de conexão não associada a usuário: {ConnectionId}", Context.ConnectionId);
         }
     }
 
-    public override Task OnDisconnectedAsync(Exception? exp) // Method called when a user disconnects
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        if (!_connections.TryGetValue(Context.ConnectionId, out User user))
+        if (exception is not null)
         {
-            return base.OnDisconnectedAsync(exp);
+            _logger.LogError(exception, "Desconexão com erro para a conexão {ConnectionId}", Context.ConnectionId);
         }
 
-        _connections.Remove(Context.ConnectionId);
-        Clients.Group(user.ChatRoom!)
-            .SendAsync("ReceiveMessage", "system", $"{user.Username} has left the Group", DateTime.Now);
-        SendConnectedUser(user.ChatRoom!);
-        return base.OnDisconnectedAsync(exp);
-    }
-    
-    public Task SendConnectedUser(string chatRoom) // Method to send the list of connected users in a chat room
-    {
-        var users = _connections.Values.
-        Where(u => u.ChatRoom == chatRoom)
-        .Select(s => s.Username).ToArray();
+        var user = await _connectionTracker.RemoveConnectionAsync(Context.ConnectionId);
+        if (user is not null)
+        {
+            var timestamp = DateTime.UtcNow;
+            var messageId = Guid.NewGuid();
 
-        return Clients.Group(chatRoom)
-            .SendAsync("ConnectedUser", users);
-    }
+            await Clients.Group(user.ChatRoom)
+                .SendAsync("ReceiveMessage", "system", $"{user.Username} has left the room", timestamp, messageId);
 
-    public async Task StartTyping (string chatRoom, string username)
-    {
-        await Clients.OthersInGroup(chatRoom).SendAsync("UserTyping", username);
+            await SendConnectedUser(user.ChatRoom);
+            _logger.LogInformation("Usuário {Username} desconectou-se da sala {ChatRoom}", user.Username, user.ChatRoom);
+        }
+
+        await base.OnDisconnectedAsync(exception);
     }
 
-    public async Task StopTyping (string chatRoom, string username)
+    public async Task SendConnectedUser(string chatRoom)
     {
-        await Clients.OthersInGroup(chatRoom).SendAsync("UserStopTyping", username);
+        if (string.IsNullOrWhiteSpace(chatRoom))
+        {
+            return;
+        }
+
+        var users = await _connectionTracker.GetUsersInRoomAsync(chatRoom.Trim());
+        await Clients.Group(chatRoom.Trim())
+            .SendAsync("ConnectedUser", users.ToArray());
+    }
+
+    public async Task StartTyping(string chatRoom, string username)
+    {
+        if (string.IsNullOrWhiteSpace(chatRoom) || string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        await Clients.OthersInGroup(chatRoom.Trim()).SendAsync("UserTyping", username.Trim());
+    }
+
+    public async Task StopTyping(string chatRoom, string username)
+    {
+        if (string.IsNullOrWhiteSpace(chatRoom) || string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        await Clients.OthersInGroup(chatRoom.Trim()).SendAsync("UserStopTyping", username.Trim());
     }
 }

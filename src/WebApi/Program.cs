@@ -1,8 +1,7 @@
-using Domain.Entities;
+using Infraestructure;
 using WebApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
-
 
 builder.Services.AddCors(options =>
 {
@@ -14,13 +13,14 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSignalR();
-builder.Services.AddSingleton<IDictionary<string, User>>(opt =>
-        new Dictionary<string, User>());
+builder.Services.AddInfrastructureServices();
 
 var app = builder.Build();
 
 app.UseRouting();
 app.UseCors("AllowAll");
+
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
 app.MapHub<ChatRoom>("/chat");
 
 app.Run();
